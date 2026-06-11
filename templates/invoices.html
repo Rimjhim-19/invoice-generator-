@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoices — Invoice Generator</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand">Invoice Generator</span>
+  <a href="/">Clients</a>
+  <a href="/create-invoice">New Invoice</a>
+  <a href="/invoices-page" class="active">Invoices</a>
+</nav>
+
+<div class="container">
+  <h1>Invoices</h1>
+
+  <div style="display:flex;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap">
+    <button class="secondary" onclick="filterBy('all')" id="btn-all">All</button>
+    <button class="secondary" onclick="filterBy('draft')" id="btn-draft">Draft</button>
+    <button class="secondary" onclick="filterBy('sent')" id="btn-sent">Sent</button>
+    <button class="secondary" onclick="filterBy('paid')" id="btn-paid">Paid</button>
+  </div>
+
+  <div class="card" style="padding:0">
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice #</th>
+          <th>Client</th>
+          <th>Issue Date</th>
+          <th>Due Date</th>
+          <th>Total</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="invoices-table">
+        <tr><td colspan="7" style="color:#999;text-align:center;padding:2rem">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  let allInvoices = [];
+
+  async function loadInvoices() {
+    const res = await fetch('/invoices');
+    allInvoices = await res.json();
+    renderTable(allInvoices);
+  }
+
+  function renderTable(invoices) {
+    const tbody = document.getElementById('invoices-table');
+    if (invoices.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="color:#999;text-align:center;padding:2rem">No invoices found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = invoices.map(inv => `
+      <tr>
+        <td style="font-weight:500">${inv.invoice_number}</td>
+        <td>${inv.client ? inv.client.name : '—'}</td>
+        <td>${inv.issue_date}</td>
+        <td>${inv.due_date}</td>
+        <td style="font-weight:500">₹${Number(inv.total).toLocaleString('en-IN')}</td>
+        <td><span class="badge ${inv.status}">${inv.status}</span></td>
+        <td><a href="/invoices-page/${inv.id}" style="font-size:13px;color:#333;text-decoration:none;border:1px solid #ddd;padding:4px 10px;border-radius:5px">View</a></td>
+      </tr>
+    `).join('');
+  }
+
+  function filterBy(status) {
+    document.querySelectorAll('.secondary').forEach(b => b.style.background = '');
+    document.getElementById(`btn-${status}`).style.background = '#f0f0f0';
+    if (status === 'all') {
+      renderTable(allInvoices);
+    } else {
+      renderTable(allInvoices.filter(inv => inv.status === status));
+    }
+  }
+
+  loadInvoices();
+  filterBy('all');
+</script>
+</body>
+</html>

@@ -124,3 +124,11 @@ def home(request: Request):
 @app.get("/create-invoice")
 def create_invoice_page(request: Request):
     return templates.TemplateResponse(request, "create_invoice.html")
+
+@app.get("/invoices-page")
+def invoices_page(request: Request):
+    return templates.TemplateResponse(request, "invoices.html")
+
+@app.get("/invoices-page/{invoice_id}")
+def invoice_detail_page(request: Request, invoice_id: int):
+    return templates.TemplateResponse(request, "invoice_detail.html", {"invoice_id": invoice_id})

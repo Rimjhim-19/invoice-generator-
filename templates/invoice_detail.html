@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice Detail — Invoice Generator</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand">Invoice Generator</span>
+  <a href="/">Clients</a>
+  <a href="/create-invoice">New Invoice</a>
+  <a href="/invoices-page" class="active">Invoices</a>
+</nav>
+
+<div class="container">
+
+  <div style="margin-bottom:1.5rem">
+    <a href="/invoices-page" style="font-size:13px;color:#666;text-decoration:none">← Back to invoices</a>
+  </div>
+
+  <div id="loading" style="color:#999">Loading invoice...</div>
+  <div id="content" style="display:none">
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+      <div>
+        <h1 id="invoice-number" style="margin-bottom:4px"></h1>
+        <span id="status-badge" class="badge"></span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="secondary" id="btn-sent" onclick="updateStatus('sent')">Mark as Sent</button>
+        <button id="btn-paid" onclick="updateStatus('paid')">Mark as Paid</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+      <div class="card">
+        <h2 style="margin-bottom:12px">Client</h2>
+        <p id="client-name" style="font-weight:500;margin-bottom:4px"></p>
+        <p id="client-email" style="font-size:13px;color:#666;margin-bottom:2px"></p>
+        <p id="client-phone" style="font-size:13px;color:#666;margin-bottom:2px"></p>
+        <p id="client-address" style="font-size:13px;color:#666"></p>
+      </div>
+      <div class="card">
+        <h2 style="margin-bottom:12px">Dates</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:6px">Issue Date</p>
+        <p id="issue-date" style="font-weight:500;margin-bottom:12px"></p>
+        <p style="font-size:13px;color:#666;margin-bottom:6px">Due Date</p>
+        <p id="due-date" style="font-weight:500"></p>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th style="text-align:right">Qty</th>
+            <th style="text-align:right">Rate</th>
+            <th style="text-align:right">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="line-items-table"></tbody>
+      </table>
+
+      <div class="totals" style="padding:1rem 1.5rem;border-top:1px solid #f0f0f0">
+        <p>Subtotal: ₹<span id="subtotal"></span></p>
+        <p>Tax (<span id="tax-pct"></span>%): ₹<span id="tax-amount"></span></p>
+        <p class="total">Total: ₹<span id="total"></span></p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const invoiceId = window.location.pathname.split('/').pop();
+  let invoice = null;
+
+  async function loadInvoice() {
+    const res = await fetch(`/invoices/${invoiceId}`);
+    if (!res.ok) {
+      document.getElementById('loading').textContent = 'Invoice not found.';
+      return;
+    }
+    invoice = await res.json();
+    renderInvoice();
+  }
+
+  function renderInvoice() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    document.getElementById('invoice-number').textContent = invoice.invoice_number;
+
+    const badge = document.getElementById('status-badge');
+    badge.textContent = invoice.status;
+    badge.className = `badge ${invoice.status}`;
+
+    if (invoice.client) {
+      document.getElementById('client-name').textContent = invoice.client.name;
+      document.getElementById('client-email').textContent = invoice.client.email;
+      document.getElementById('client-phone').textContent = invoice.client.phone || '';
+      document.getElementById('client-address').textContent = invoice.client.address || '';
+    }
+
+    document.getElementById('issue-date').textContent = invoice.issue_date;
+    document.getElementById('due-date').textContent = invoice.due_date;
+
+    document.getElementById('line-items-table').innerHTML = invoice.line_items.map(item => {
+      const amount = Number(item.quantity) * Number(item.rate);
+      return `
+        <tr>
+          <td>${item.description}</td>
+          <td style="text-align:right">${item.quantity}</td>
+          <td style="text-align:right">₹${Number(item.rate).toLocaleString('en-IN')}</td>
+          <td style="text-align:right;font-weight:500">₹${amount.toLocaleString('en-IN')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    document.getElementById('subtotal').textContent = Number(invoice.subtotal).toLocaleString('en-IN');
+    document.getElementById('tax-pct').textContent = invoice.tax_percent;
+    document.getElementById('tax-amount').textContent = Number(invoice.tax_amount).toLocaleString('en-IN');
+    document.getElementById('total').textContent = Number(invoice.total).toLocaleString('en-IN');
+
+    document.getElementById('btn-sent').style.display = invoice.status === 'paid' ? 'none' : '';
+    document.getElementById('btn-paid').style.display = invoice.status === 'paid' ? 'none' : '';
+  }
+
+  async function updateStatus(newStatus) {
+    const res = await fetch(`/invoices/${invoiceId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (res.ok) {
+      invoice = await res.json();
+      renderInvoice();
+    }
+  }
+
+  loadInvoice();
+</script>
+</body>
+</html>
