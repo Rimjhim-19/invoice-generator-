@@ -1,3 +1,6 @@
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
@@ -12,6 +15,9 @@ from typing import List
 from datetime import datetime
 
 app = FastAPI(title="Invoice Generator")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 
 def generate_invoice_number(db: Session) -> str:
@@ -111,3 +117,10 @@ def enrich_invoice(invoice: Invoice) -> dict:
     result.tax_amount = round(tax_amount, 2)
     result.total = round(total, 2)
     return result
+@app.get("/")
+def home(request: Request):
+    return templates.TemplateResponse(request, "clients.html")
+
+@app.get("/create-invoice")
+def create_invoice_page(request: Request):
+    return templates.TemplateResponse(request, "create_invoice.html")

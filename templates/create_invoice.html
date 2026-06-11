@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>New Invoice — Invoice Generator</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand">Invoice Generator</span>
+  <a href="/">Clients</a>
+  <a href="/create-invoice" class="active">New Invoice</a>
+  <a href="/invoices">Invoices</a>
+</nav>
+
+<div class="container">
+  <h1>Create Invoice</h1>
+
+  <div id="success" class="success-msg">Invoice created successfully!</div>
+  <div id="error" class="error-msg"></div>
+
+  <div class="card">
+    <h2>Invoice details</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Client *</label>
+        <select id="client-select">
+          <option value="">Select a client...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tax %</label>
+        <input type="number" id="tax" value="18" min="0" max="100" oninput="updateTotals()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Issue Date *</label>
+        <input type="date" id="issue-date">
+      </div>
+      <div class="form-group">
+        <label>Due Date *</label>
+        <input type="date" id="due-date">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Line items</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:45%">Description</th>
+          <th style="width:15%">Qty</th>
+          <th style="width:20%">Rate (₹)</th>
+          <th style="width:15%">Amount</th>
+          <th style="width:5%"></th>
+        </tr>
+      </thead>
+      <tbody id="line-items-body"></tbody>
+    </table>
+
+    <button class="secondary" style="margin-top:1rem" onclick="addRow()">+ Add line item</button>
+
+    <div class="totals">
+      <p>Subtotal: ₹<span id="subtotal">0.00</span></p>
+      <p>Tax (<span id="tax-label">18</span>%): ₹<span id="tax-amount">0.00</span></p>
+      <p class="total">Total: ₹<span id="total">0.00</span></p>
+    </div>
+  </div>
+
+  <button onclick="submitInvoice()" style="width:100%;padding:12px;font-size:15px">Create Invoice</button>
+</div>
+
+<script>
+  async function loadClients() {
+    const res = await fetch('/clients');
+    const clients = await res.json();
+    const select = document.getElementById('client-select');
+    clients.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      select.appendChild(opt);
+    });
+  }
+
+  function addRow() {
+    const tbody = document.getElementById('line-items-body');
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><input type="text" placeholder="e.g. Website Design" style="width:100%" oninput="updateTotals()"></td>
+      <td><input type="number" value="1" min="0" style="width:100%" oninput="updateTotals()"></td>
+      <td><input type="number" value="0" min="0" style="width:100%" oninput="updateTotals()"></td>
+      <td id="amt" style="font-weight:500">₹0.00</td>
+      <td><button class="danger" onclick="removeRow(this)">✕</button></td>
+    `;
+    tbody.appendChild(row);
+    updateTotals();
+  }
+
+  function removeRow(btn) {
+    btn.closest('tr').remove();
+    updateTotals();
+  }
+
+  function updateTotals() {
+    const rows = document.querySelectorAll('#line-items-body tr');
+    let subtotal = 0;
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const qty = parseFloat(inputs[1].value) || 0;
+      const rate = parseFloat(inputs[2].value) || 0;
+      const amount = qty * rate;
+      row.querySelector('#amt').textContent = '₹' + amount.toFixed(2);
+      subtotal += amount;
+    });
+    const taxPct = parseFloat(document.getElementById('tax').value) || 0;
+    const taxAmount = subtotal * taxPct / 100;
+    const total = subtotal + taxAmount;
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('tax-label').textContent = taxPct;
+    document.getElementById('tax-amount').textContent = taxAmount.toFixed(2);
+    document.getElementById('total').textContent = total.toFixed(2);
+  }
+
+  async function submitInvoice() {
+    const clientId = document.getElementById('client-select').value;
+    const issueDate = document.getElementById('issue-date').value;
+    const dueDate = document.getElementById('due-date').value;
+    const taxPct = document.getElementById('tax').value;
+
+    const successEl = document.getElementById('success');
+    const errorEl = document.getElementById('error');
+    successEl.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    if (!clientId || !issueDate || !dueDate) {
+      errorEl.textContent = 'Please fill in all required fields.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const rows = document.querySelectorAll('#line-items-body tr');
+    if (rows.length === 0) {
+      errorEl.textContent = 'Please add at least one line item.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const invoiceRes = await fetch('/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: parseInt(clientId),
+        issue_date: issueDate,
+        due_date: dueDate,
+        tax_percent: parseFloat(taxPct)
+      })
+    });
+
+    if (!invoiceRes.ok) {
+      errorEl.textContent = 'Failed to create invoice.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const invoice = await invoiceRes.json();
+
+    for (const row of rows) {
+      const inputs = row.querySelectorAll('input');
+      await fetch(`/invoices/${invoice.id}/line-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: inputs[0].value,
+          quantity: parseFloat(inputs[1].value),
+          rate: parseFloat(inputs[2].value)
+        })
+      });
+    }
+
+    successEl.style.display = 'block';
+    document.getElementById('line-items-body').innerHTML = '';
+    document.getElementById('client-select').value = '';
+    updateTotals();
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('issue-date').value = today;
+
+  loadClients();
+  addRow();
+</script>
+</body>
+</html>
