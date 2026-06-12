@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>New Invoice — Invoice Generator</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -17,8 +18,7 @@
 <div class="container">
   <h1>Create Invoice</h1>
 
-  <div id="success" class="success-msg">Invoice created successfully!</div>
-  <div id="error" class="error-msg"></div>
+  <div id="toast" class="toast"></div>
 
   <div class="card">
     <h2>Invoice details</h2>
@@ -74,6 +74,27 @@
 </div>
 
 <script>
+  function showToast(message, type) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `toast ${type}`;
+    toast.style.display = 'block';
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => {
+      toast.style.display = 'none';
+    }, 3000);
+  }
+
+  function extractErrorMessage(errData, fallback) {
+    if (errData.detail) {
+      if (Array.isArray(errData.detail)) {
+        return errData.detail.map(e => e.msg).join(', ');
+      }
+      return errData.detail;
+    }
+    return fallback;
+  }
+
   async function loadClients() {
     const res = await fetch('/clients');
     const clients = await res.json();
@@ -131,21 +152,14 @@
     const dueDate = document.getElementById('due-date').value;
     const taxPct = document.getElementById('tax').value;
 
-    const successEl = document.getElementById('success');
-    const errorEl = document.getElementById('error');
-    successEl.style.display = 'none';
-    errorEl.style.display = 'none';
-
     if (!clientId || !issueDate || !dueDate) {
-      errorEl.textContent = 'Please fill in all required fields.';
-      errorEl.style.display = 'block';
+      showToast('Please fill in all required fields.', 'error');
       return;
     }
 
     const rows = document.querySelectorAll('#line-items-body tr');
     if (rows.length === 0) {
-      errorEl.textContent = 'Please add at least one line item.';
-      errorEl.style.display = 'block';
+      showToast('Please add at least one line item.', 'error');
       return;
     }
 
@@ -161,16 +175,17 @@
     });
 
     if (!invoiceRes.ok) {
-      errorEl.textContent = 'Failed to create invoice.';
-      errorEl.style.display = 'block';
+      const errData = await invoiceRes.json();
+      showToast(extractErrorMessage(errData, 'Failed to create invoice.'), 'error');
       return;
     }
 
     const invoice = await invoiceRes.json();
 
+    let lineItemError = null;
     for (const row of rows) {
       const inputs = row.querySelectorAll('input');
-      await fetch(`/invoices/${invoice.id}/line-items`, {
+      const itemRes = await fetch(`/invoices/${invoice.id}/line-items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -179,11 +194,22 @@
           rate: parseFloat(inputs[2].value)
         })
       });
+      if (!itemRes.ok) {
+        const errData = await itemRes.json();
+        lineItemError = extractErrorMessage(errData, 'Invalid line item.');
+        break;
+      }
     }
 
-    successEl.style.display = 'block';
+    if (lineItemError) {
+      showToast(lineItemError, 'error');
+      return;
+    }
+
+    showToast('Invoice created successfully!', 'success');
     document.getElementById('line-items-body').innerHTML = '';
     document.getElementById('client-select').value = '';
+    addRow();
     updateTotals();
   }
 

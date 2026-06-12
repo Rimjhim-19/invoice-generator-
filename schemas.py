@@ -1,13 +1,22 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import date
 from decimal import Decimal
 
+
 class ClientCreate(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     phone: Optional[str] = None
     address: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError("Name cannot be empty")
+        return v.strip()
+
 
 class ClientOut(BaseModel):
     id: int
@@ -25,6 +34,14 @@ class LineItemCreate(BaseModel):
     quantity: Decimal
     rate: Decimal
 
+    @field_validator("quantity", "rate")
+    @classmethod
+    def must_be_positive(cls, v):
+        if v <= 0:
+            raise ValueError("Must be greater than 0")
+        return v
+
+
 class LineItemOut(BaseModel):
     id: int
     description: str
@@ -41,6 +58,22 @@ class InvoiceCreate(BaseModel):
     issue_date: date
     due_date: date
     tax_percent: Optional[Decimal] = Decimal("0")
+
+    @field_validator("tax_percent")
+    @classmethod
+    def tax_in_range(cls, v):
+        if v < 0 or v > 100:
+            raise ValueError("Tax percent must be between 0 and 100")
+        return v
+
+    @field_validator("due_date")
+    @classmethod
+    def due_after_issue(cls, v, info):
+        issue = info.data.get("issue_date")
+        if issue and v < issue:
+            raise ValueError("Due date must be on or after issue date")
+        return v
+
 
 class InvoiceOut(BaseModel):
     id: int
@@ -62,3 +95,10 @@ class InvoiceOut(BaseModel):
 
 class StatusUpdate(BaseModel):
     status: str
+
+    @field_validator("status")
+    @classmethod
+    def valid_status(cls, v):
+        if v not in ["draft", "sent", "paid"]:
+            raise ValueError("Status must be draft, sent, or paid")
+        return v
