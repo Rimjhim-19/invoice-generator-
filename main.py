@@ -1,3 +1,5 @@
+from fastapi.responses import StreamingResponse
+from pdf_generator import generate_invoice_pdf
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -132,3 +134,20 @@ def invoices_page(request: Request):
 @app.get("/invoices-page/{invoice_id}")
 def invoice_detail_page(request: Request, invoice_id: int):
     return templates.TemplateResponse(request, "invoice_detail.html", {"invoice_id": invoice_id})
+
+@app.get("/invoices/{invoice_id}/pdf")
+def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    enriched = enrich_invoice(invoice)
+    buffer = generate_invoice_pdf(enriched)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={invoice.invoice_number}.pdf"
+        }
+    )

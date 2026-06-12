@@ -29,6 +29,7 @@
         <span id="status-badge" class="badge"></span>
       </div>
       <div style="display:flex;gap:8px">
+        <a id="download-btn" class="secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:9px 20px;border:1px solid #ddd;border-radius:6px;font-size:14px;color:#111">Download PDF</a>
         <button class="secondary" id="btn-sent" onclick="updateStatus('sent')">Mark as Sent</button>
         <button id="btn-paid" onclick="updateStatus('paid')">Mark as Paid</button>
       </div>
@@ -93,6 +94,7 @@
     document.getElementById('content').style.display = 'block';
 
     document.getElementById('invoice-number').textContent = invoice.invoice_number;
+    document.getElementById('download-btn').href = `/invoices/${invoice.id}/pdf`;
 
     const badge = document.getElementById('status-badge');
     badge.textContent = invoice.status;
